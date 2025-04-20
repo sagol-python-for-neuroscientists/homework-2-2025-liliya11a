@@ -1,31 +1,56 @@
-from collections import namedtuple
 from enum import Enum
+from collections import namedtuple
+from itertools import zip_longest
 
+# Define the possible conditions
 Condition = Enum("Condition", ("CURE", "HEALTHY", "SICK", "DYING", "DEAD"))
 Agent = namedtuple("Agent", ("name", "category"))
 
+# Helper: determines if the agent can attend a meeting
+def is_active(agent):
+    return agent.category not in {Condition.HEALTHY, Condition.DEAD}
 
+# Helper: applies the cure effect to the agent
+def cure_effect(agent):
+    if agent.category == Condition.DYING:
+        return agent._replace(category=Condition.SICK)
+    elif agent.category == Condition.SICK:
+        return agent._replace(category=Condition.HEALTHY)
+    return agent
+
+# Helper: worsens the agent’s condition
+def worsen(agent):
+    if agent.category == Condition.SICK:
+        return agent._replace(category=Condition.DYING)
+    elif agent.category == Condition.DYING:
+        return agent._replace(category=Condition.DEAD)
+    return agent
+
+# Helper: handles a meeting between two active agents
+def process_pair(a1, a2):
+    if a1.category == Condition.CURE and a2.category != Condition.CURE:
+        return a1, cure_effect(a2)
+    elif a2.category == Condition.CURE and a1.category != Condition.CURE:
+        return cure_effect(a1), a2
+    elif a1.category == Condition.CURE and a2.category == Condition.CURE:
+        return a1, a2
+    else:
+        return worsen(a1), worsen(a2)
+
+# Main function
 def meetup(agent_listing: tuple) -> list:
-    """Model the outcome of the meetings of pairs of agents.
+    active_agents = [agent for agent in agent_listing if is_active(agent)]
+    inactive_agents = [agent for agent in agent_listing if not is_active(agent)]
+    
+    result_agents = []
 
-    The pairs of agents are ((a[0], a[1]), (a[2], a[3]), ...). If there's an uneven
-    number of agents, the last agent will remain the same.
+    # Group agents into pairs (a1, a2), handle odd number with zip_longest
+    for a1, a2 in zip_longest(*[iter(active_agents)]*2):
+        if a2 is None:
+            result_agents.append(a1)
+        else:
+            updated1, updated2 = process_pair(a1, a2)
+            result_agents.extend([updated1, updated2])
 
-    Notes
-    -----
-    The rules governing the meetings were described in the question. The outgoing
-    listing may change its internal ordering relative to the incoming one.
+    return result_agents + inactive_agents
 
-    Parameters
-    ----------
-    agent_listing : tuple of Agent
-        A listing (tuple in this case) in which each element is of the Agent
-        type, containing a 'name' field and a 'category' field, with 'category' being
-        of the type Condition.
-
-    Returns
-    -------
-    updated_listing : list
-        A list of Agents with their 'category' field changed according to the result
-        of the meeting.
-    """
